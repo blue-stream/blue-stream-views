@@ -1,4 +1,4 @@
-repoName: blue-stream/blue-stream-feature-name
+repoName: blue-stream/blue-stream-views
 runTests: true
 testCommand:
 deployUponTestSuccess: true
