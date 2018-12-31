@@ -21,7 +21,7 @@ export const config = {
         username: process.env.RMQ_USERNAME || 'guest',
     },
     server: {
-        port:  +(process.env.PORT || 3000),
+        port: +(process.env.PORT || 3000),
         name: 'view',
     },
     cors: {
@@ -31,4 +31,5 @@ export const config = {
         required: true,
         secret: process.env.SECRET_KEY || 'bLue5tream@2018', // Don't use static value in production! remove from source control!
     },
+    viewDebounceDuration: +(process.env.VIEWS_DEBOUNCE_DURATION || 15), // in minutes
 };
