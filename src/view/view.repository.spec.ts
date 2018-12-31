@@ -1,346 +1,161 @@
 import { expect } from 'chai';
 import * as mongoose from 'mongoose';
 import { config } from '../config';
-import { ServerError } from '../utils/errors/applicationError';
-import { IView } from './view.interface';
+import { IView, ResourceType } from './view.interface';
+import { ViewModel } from './view.model';
 import { ViewRepository } from './view.repository';
 
-const validId: string = new mongoose.Types.ObjectId().toHexString();
-const invalidId: string = 'invalid id';
 const view: IView = {
-    property: 'prop',
+    amount: 1,
+    lastViewDate: new Date(),
+    resource: '1323153643',
+    resourceType: ResourceType.VIDEO,
+    user: 'user@domain',
 };
-const viewArr: IView[] = ['prop', 'prop', 'prop', 'b', 'c', 'd'].map(item => ({ property: item }));
-const invalidView: any = {
-    property: { invalid: true },
-};
-const viewFilter: Partial<IView> = { property: 'prop' };
-const viewDataToUpdate: Partial<IView> = { property: 'updated' };
-const unexistingView: Partial<IView> = { property: 'unexisting' };
-const unknownProperty: Object = { unknownProperty: true };
+const views: Partial<IView>[] = [
+    {
+        resource: '1',
+        resourceType: ResourceType.VIDEO,
+        user: '1@1',
+    },
+    {
+        resource: '2',
+        resourceType: ResourceType.VIDEO,
+        user: '2@2',
+    },
+    {
+        resource: '3',
+        resourceType: ResourceType.VIDEO,
+        user: '1@1',
+    },
+    {
+        resource: '4',
+        resourceType: ResourceType.VIDEO,
+        user: '2@2',
+    },
+];
 
 describe('View Repository', function () {
     before(async function () {
+        mongoose.set('useCreateIndex', true);
         await mongoose.connect(`mongodb://${config.db.host}:${config.db.port}/${config.db.name}`, { useNewUrlParser: true });
+
     });
 
     afterEach(async function () {
-        await mongoose.connection.dropDatabase();
+        await ViewModel.deleteMany({}).exec();
     });
 
     after(async function () {
         await mongoose.connection.close();
     });
 
-    describe('#create()', function () {
-        context('When view is valid', function () {
-            it('Should create view', async function () {
-                const createdView = await ViewRepository.create(view);
-                expect(createdView).to.exist;
-                expect(createdView).to.have.property('property', 'prop');
-                expect(createdView).to.have.property('createdAt');
-                expect(createdView).to.have.property('updatedAt');
-                expect(createdView).to.have.property('_id').which.satisfies((id: any) => {
-                    return mongoose.Types.ObjectId.isValid(id);
-                });
-            });
-        });
-
-        context('When view is invalid', function () {
-            it('Should throw validation error when incorrect property type', async function () {
-                let hasThrown = false;
-
-                try {
-                    await ViewRepository.create(invalidView);
-                } catch (err) {
-                    hasThrown = true;
-                    expect(err).to.exist;
-                    expect(err).to.have.property('name', 'ValidationError');
-                    expect(err).to.have.property('message').that.matches(/cast.+failed/i);
-                    expect(err).to.have.property('errors');
-                    expect(err.errors).to.have.property('property');
-                    expect(err.errors.property).to.have.property('name', 'CastError');
-                } finally {
-                    expect(hasThrown).to.be.true;
-                }
-            });
-
-            it('Should throw validation error when empty view passed', async function () {
-                let hasThrown = false;
-
-                try {
-                    await ViewRepository.create({} as IView);
-                } catch (err) {
-                    hasThrown = true;
-                    expect(err).to.have.property('name', 'ValidationError');
-                    expect(err).to.have.property('message').that.matches(/path.+required/i);
-                } finally {
-                    expect(hasThrown);
-                }
-            });
-        });
-    });
-
-    describe('#createMany()', function () {
+    describe('#create', function () {
         context('When data is valid', function () {
-            it('Should create many documents', async function () {
-                const createdDocuments = await ViewRepository.createMany(viewArr);
+            it('Should create a view document', async function () {
+                const doc = await ViewRepository.create(view.resource, view.resourceType, view.user);
 
-                expect(createdDocuments).to.exist;
-                expect(createdDocuments).to.be.an('array');
-                expect(createdDocuments).to.have.lengthOf(viewArr.length);
-            });
-
-            it('Should not create documents when empty array passed', async function () {
-                const docs = await ViewRepository.createMany([]);
-
-                expect(docs).to.exist;
-                expect(docs).to.be.an('array');
-                expect(docs).to.be.empty;
-            });
-        });
-
-        context('When data is invalid', function () {
-            it('Should throw error when 1 of the docs invalid', async function () {
-                let hasThrown = false;
-                const docs: IView[] = [
-                    ...viewArr,
-                    {} as IView,
-                ];
-
-                try {
-                    await ViewRepository.createMany(docs);
-                } catch (err) {
-                    hasThrown = true;
-                    expect(err).to.have.property('name', 'ValidationError');
-                    expect(err).to.have.property('message').that.matches(/path.+required/i);
-                } finally {
-                    expect(hasThrown).to.be.true;
-                }
-            });
-        });
-    });
-
-    describe('#updateById()', function () {
-
-        let createdView: IView;
-
-        beforeEach(async function () {
-            createdView = await ViewRepository.create(view);
-            expect(createdView).have.property('id');
-        });
-
-        context('When data is valid', function () {
-
-            it('Should update an existsing view', async function () {
-                const updatedDoc = await ViewRepository.updateById(createdView.id!, viewDataToUpdate);
-                expect(updatedDoc).to.exist;
-                expect(updatedDoc).to.have.property('id', createdView.id);
-                for (const prop in viewDataToUpdate) {
-                    expect(updatedDoc).to.have.property(prop, viewDataToUpdate[prop as keyof IView]);
-                }
-            });
-
-            it('Should not update an existing view when empty data provided', async function () {
-                const updatedDoc = await ViewRepository.updateById(createdView.id!, {});
-                expect(updatedDoc).to.exist;
-                expect(updatedDoc).to.have.property('id', createdView.id);
-
-                for (const prop in view) {
-                    expect(updatedDoc).to.have.property(prop, createdView[prop as keyof IView]);
-                }
-            });
-
-            it('Should return null when updated doc does does not exist', async function () {
-                const updatedDoc = await ViewRepository.updateById(new mongoose.Types.ObjectId().toHexString(), {});
-                expect(updatedDoc).to.not.exist;
-            });
-        });
-
-        context('When data is not valid', function () {
-            it('Should throw error when updated doc is not valid', async function () {
-                let hasThrown = false;
-
-                try {
-                    await ViewRepository.updateById(createdView.id as string, { property: null } as any);
-                } catch (err) {
-                    hasThrown = true;
-                    expect(err).to.exist;
-                    expect(err).to.have.property('name', 'ValidationError');
-                    expect(err).to.have.property('message').that.matches(/path.+required/i);
-                } finally {
-                    expect(hasThrown).to.be.true;
-                }
-            });
-        });
-    });
-
-    describe('#updateMany()', function () {
-
-        beforeEach(async function () {
-            await ViewRepository.createMany(viewArr);
-        });
-
-        context('When data is valid', function () {
-
-            it('Should update many documents', async function () {
-                const updated = await ViewRepository.updateMany(viewFilter, viewDataToUpdate);
-
-                const amountOfRequiredUpdates = viewArr.filter((item: IView) => {
-                    let match = true;
-                    for (const prop in viewFilter) {
-                        match = match && item[prop as keyof IView] === viewFilter[prop as keyof IView];
-                    }
-
-                    return match;
-                }).length;
-
-                expect(updated).to.exist;
-                expect(updated).to.have.property('nModified', amountOfRequiredUpdates);
-
-                const documents = await ViewRepository.getMany(viewDataToUpdate);
-                expect(documents).to.exist;
-                expect(documents).to.be.an('array');
-                expect(documents).to.have.lengthOf(amountOfRequiredUpdates);
-            });
-
-            it('Should update all documents when no filter passed', async function () {
-                const updated = await ViewRepository.updateMany({}, viewDataToUpdate);
-                expect(updated).to.exist;
-                expect(updated).to.have.property('nModified', viewArr.length);
-
-                const documents = await ViewRepository.getMany(viewDataToUpdate);
-                expect(documents).to.exist;
-                expect(documents).to.be.an('array');
-                expect(documents).to.have.lengthOf(viewArr.length);
-            });
-
-            it('Should do nothing when criteria does not match any document', async function () {
-                const updated = await ViewRepository.updateMany(unexistingView, viewDataToUpdate);
-                expect(updated).to.exist;
-                expect(updated).to.have.property('nModified', 0);
-
-                const documents = await ViewRepository.getMany(viewDataToUpdate);
-                expect(documents).to.exist;
-                expect(documents).to.be.an('array');
-                expect(documents).to.have.lengthOf(0);
-            });
-
-        });
-
-        context('When data is invalid', function () {
-
-            it('Should throw error when empty data provided', async function () {
-                let hasThrown = false;
-
-                try {
-                    await ViewRepository.updateMany(viewFilter, {});
-                } catch (err) {
-                    hasThrown = true;
-                    expect(err).to.exist;
-                    expect(err instanceof ServerError).to.be.true;
-                } finally {
-                    expect(hasThrown).to.be.true;
-                }
-            });
-
-            it('Should not update documents when invalid data passed', async function () {
-                await ViewRepository.updateMany({}, unknownProperty);
-
-                const documents = await ViewRepository.getMany({});
-                expect(documents).to.exist;
-                expect(documents).to.be.an('array');
-                expect(documents).to.satisfy((documents: IView[]) => {
-                    documents.forEach((doc: IView) => {
-                        for (const prop in unknownProperty) {
-                            expect(doc).to.not.have.property(prop);
-                        }
-                    });
-
-                    return true;
-                });
-            });
-        });
-    });
-
-    describe('#deleteById()', function () {
-
-        let document: IView;
-
-        beforeEach(async function () {
-            document = await ViewRepository.create(view);
-        });
-
-        context('When data is valid', function () {
-
-            it('Should delete document by id', async function () {
-                const deleted = await ViewRepository.deleteById(document.id!);
-                expect(deleted).to.exist;
-                expect(deleted).to.have.property('id', document.id);
-
-                const doc = await ViewRepository.getById(document.id!);
-                expect(doc).to.not.exist;
-            });
-
-            it('Should return null when document does not exist', async function () {
-                const deleted = await ViewRepository.deleteById(new mongoose.Types.ObjectId().toHexString());
-                expect(deleted).to.not.exist;
-            });
-        });
-
-        context('When data is invalid', function () {
-            it('Should throw error when id is not in the correct format', async function () {
-                let hasThrown = false;
-
-                try {
-                    await ViewRepository.deleteById('invalid id');
-                } catch (err) {
-                    hasThrown = true;
-                    expect(err).to.exist;
-                    expect(err).to.have.property('name', 'CastError');
-                    expect(err).to.have.property('kind', 'ObjectId');
-                    expect(err).to.have.property('path', '_id');
-                } finally {
-                    expect(hasThrown).to.be.true;
-                }
-            });
-        });
-    });
-
-    describe('#getById()', function () {
-
-        context('When data is valid', function () {
-
-            let document: IView;
-            beforeEach(async function () {
-                document = await ViewRepository.create(view);
-            });
-
-            it('Should return document by id', async function () {
-                const doc = await ViewRepository.getById(document.id!);
                 expect(doc).to.exist;
-                expect(doc).to.have.property('id', document.id);
-                for (const prop in view) {
-                    expect(doc).to.have.property(prop, view[prop as keyof IView]);
+                expect(doc).to.have.property('amount', 1);
+                expect(doc).to.have.property('user', view.user);
+                expect(doc).to.have.property('resourceType', view.resourceType);
+                expect(doc).to.have.property('lastViewDate').which.is.instanceOf(Date);
+            });
+
+            it('Should throw an error when duplicate data inserted', async function () {
+                let hasThrown = false;
+                await ViewRepository.create(view.resource, view.resourceType, view.user);
+
+                try {
+                    await ViewRepository.create(view.resource, view.resourceType, view.user);
+                } catch (err) {
+                    hasThrown = true;
+                    expect(err).to.exist;
+                    expect(err).to.have.property('code', 11000);
+                } finally {
+                    expect(hasThrown).to.be.true;
                 }
             });
 
-            it('Should return null when document does not exist', async function () {
-                const doc = await ViewRepository.getById(validId);
-                expect(doc).to.not.exist;
+            it('Should create view for different user and resources', async function () {
+                const doc1 = await ViewRepository.create(view.resource, view.resourceType, `${view.user}1`);
+                const doc2 = await ViewRepository.create(view.resource, view.resourceType, `${view.user}2`);
+
+                expect(doc1).to.exist;
+                expect(doc2).to.exist;
+                expect(doc1).to.have.property('user', `${view.user}1`);
+                expect(doc2).to.have.property('user', `${view.user}2`);
+                expect(doc1).to.have.property('resource', view.resource);
+                expect(doc2).to.have.property('resource', view.resource);
             });
         });
 
         context('When data is invalid', function () {
-            it('Should throw error when id is not in correct format', async function () {
+            it('Should throw validation error when user is invalid', async function () {
                 let hasThrown = false;
 
                 try {
-                    await ViewRepository.getById(invalidId);
+                    await ViewRepository.create(view.resource, view.resourceType, 'test');
                 } catch (err) {
                     hasThrown = true;
-
                     expect(err).to.exist;
+                    expect(err).to.have.property('name', 'ValidationError');
+                } finally {
+                    expect(hasThrown).to.be.true;
+                }
+            });
+
+            it('Should throw validation error when resourceType is invalid', async function () {
+                let hasThrown = false;
+
+                try {
+                    await ViewRepository.create(view.resource, 'TEST' as any, view.user);
+                } catch (err) {
+                    hasThrown = true;
+                    expect(err).to.exist;
+                    expect(err).to.have.property('name', 'ValidationError');
+                } finally {
+                    expect(hasThrown).to.be.true;
+                }
+            });
+
+            it('Should throw validation error when resourceType is null', async function () {
+                let hasThrown = false;
+
+                try {
+                    await ViewRepository.create(view.resource, null as any, view.user);
+                } catch (err) {
+                    hasThrown = true;
+                    expect(err).to.exist;
+                    expect(err).to.have.property('name', 'ValidationError');
+                } finally {
+                    expect(hasThrown).to.be.true;
+                }
+            });
+
+            it('Should throw validation error when user is null', async function () {
+                let hasThrown = false;
+
+                try {
+                    await ViewRepository.create(view.resource, view.resourceType, null as any);
+                } catch (err) {
+                    hasThrown = true;
+                    expect(err).to.exist;
+                    expect(err).to.have.property('name', 'ValidationError');
+                } finally {
+                    expect(hasThrown).to.be.true;
+                }
+            });
+
+            it('Should throw validation error when resource is null', async function () {
+                let hasThrown = false;
+
+                try {
+                    await ViewRepository.create(null as any, view.resourceType, view.user);
+                } catch (err) {
+                    hasThrown = true;
+                    expect(err).to.exist;
+                    expect(err).to.have.property('name', 'ValidationError');
                 } finally {
                     expect(hasThrown).to.be.true;
                 }
@@ -348,97 +163,57 @@ describe('View Repository', function () {
         });
     });
 
-    describe('#getOne()', function () {
-
+    describe('#getOne', function () {
         context('When data is valid', function () {
-            let document: IView;
-
-            beforeEach(async function () {
-                document = await ViewRepository.create(view);
+            let createdView: IView;
+            before(async function () {
+                createdView = await ViewRepository.create(view.resource, view.resourceType, view.user);
             });
 
-            it('Should return document by id', async function () {
-                const doc = await ViewRepository.getOne({ _id: document.id } as Partial<IView>);
+            it('Should return view', async function () {
+                const doc = await ViewRepository.getOne(view.resource, view.user);
+
                 expect(doc).to.exist;
                 for (const prop in view) {
-                    expect(doc).to.have.property(prop, view[prop as keyof IView]);
+                    expect(doc).to.have.property(prop).which.is.deep.equal(createdView[prop as keyof IView]);
                 }
             });
 
-            it('Should return document by property', async function () {
-                const doc = await ViewRepository.getOne(viewFilter);
-                expect(doc).to.exist;
-                expect(doc).to.have.property('id', document.id);
-                for (const prop in view) {
-                    expect(doc).to.have.property(prop, view[prop as keyof IView]);
-                }
-            });
-
-            it('Should return null when document does not exist', async function () {
-                const doc = await ViewRepository.getOne(unexistingView);
-                expect(doc).to.not.exist;
-            });
-        });
-
-        context('When data is invalid', function () {
-            it('Should throw error when filter does not exist', async function () {
-                let hasThrown = false;
-
-                try {
-                    await ViewRepository.getOne({});
-                } catch (err) {
-                    hasThrown = true;
-                    expect(err).to.exist;
-                    expect(err instanceof ServerError).to.be.true;
-                } finally {
-                    expect(hasThrown).to.be.true;
-                }
-            });
-
-            it('Should return null when filter is not in the correct format', async function () {
-                const doc = await ViewRepository.getOne(unknownProperty);
-                expect(doc).to.not.exist;
+            it('Should return null when view not exists', async function () {
+                const doc = await ViewRepository.getOne('non', '');
+                expect(doc).to.be.null;
             });
         });
     });
 
-    describe('#getMany()', function () {
-
+    describe('#getMany', function () {
         context('When data is valid', function () {
-
             beforeEach(async function () {
-                await ViewRepository.createMany(viewArr);
+                await Promise.all(views.map(view => ViewRepository.create(view.resource!, view.resourceType!, view.user!)));
             });
 
             it('Should return all documents when filter is empty', async function () {
-                const documents = await ViewRepository.getMany({});
-                expect(documents).to.exist;
-                expect(documents).to.be.an('array');
-                expect(documents).to.have.lengthOf(viewArr.length);
+                const _views = await ViewRepository.getMany({});
+
+                expect(_views).to.exist;
+                expect(_views).to.be.an('array');
+                expect(_views).to.have.lengthOf(views.length);
             });
 
             it('Should return only matching documents', async function () {
-                const documents = await ViewRepository.getMany(viewFilter);
-                expect(documents).to.exist;
-                expect(documents).to.be.an('array');
+                const _views = await ViewRepository.getMany({ user: '1@1' });
 
-                const amountOfRequiredDocuments = viewArr.filter((item: IView) => {
-                    let match = true;
-                    for (const prop in viewFilter) {
-                        match = match && item[prop as keyof IView] === viewFilter[prop as keyof IView];
-                    }
-
-                    return match;
-                }).length;
-
-                expect(documents).to.have.lengthOf(amountOfRequiredDocuments);
+                expect(_views).to.exist;
+                expect(_views).to.be.an('array');
+                expect(_views).to.have.lengthOf(views.filter(v => v.user === '1@1').length);
             });
 
-            it('Should return empty array when critiria not matching any document', async function () {
-                const documents = await ViewRepository.getMany(unexistingView);
-                expect(documents).to.exist;
-                expect(documents).to.be.an('array');
-                expect(documents).to.have.lengthOf(0);
+            it('Should return empty array when no documents match filter criteria', async function () {
+                const _views = await ViewRepository.getMany({ user: 'unexisting@view' });
+
+                expect(_views).to.exist;
+                expect(_views).to.be.an('array');
+                expect(_views).to.have.lengthOf(0);
             });
         });
 
@@ -457,58 +232,54 @@ describe('View Repository', function () {
                 }
             });
 
-            it('Should return empty array when filter is not in correct format', async function () {
-                const documents = await ViewRepository.getMany(unknownProperty);
-                expect(documents).to.exist;
-                expect(documents).to.be.an('array');
-                expect(documents).to.have.lengthOf(0);
+            it('Should return empty array when filter is not in the correct format', async function () {
+                const docs = await ViewRepository.getMany({ hello: 'world' } as any);
+
+                expect(docs).to.exist;
+                expect(docs).to.be.an('array');
+                expect(docs).to.have.lengthOf(0);
             });
         });
     });
 
-    describe('#getAmount()', function () {
-
+    describe('#getAmount', function () {
         context('When data is valid', function () {
-
             beforeEach(async function () {
-                await ViewRepository.createMany(viewArr);
+                await Promise.all(views.map(view => ViewRepository.create(view.resource!, view.resourceType!, view.user!)));
             });
 
-            it('Should return amount of all documents when no filter provided', async function () {
+            it('Should return amount of all views when no filter provided', async function () {
                 const amount = await ViewRepository.getAmount({});
                 expect(amount).to.exist;
                 expect(amount).to.be.a('number');
-                expect(amount).to.equal(viewArr.length);
+                expect(amount).to.equal(views.length);
             });
 
-            it('Should return amount of filtered documents', async function () {
-                const amount = await ViewRepository.getAmount(viewFilter);
+            it('Should return amount of filtered views', async function () {
+                const amount = await ViewRepository.getAmount({ user: '1@1' });
                 expect(amount).to.exist;
                 expect(amount).to.be.a('number');
-
-                const amountOfRequiredDocuments = viewArr.filter((item: IView) => {
-                    let match = true;
-                    for (const prop in viewFilter) {
-                        match = match && item[prop as keyof IView] === viewFilter[prop as keyof IView];
-                    }
-
-                    return match;
-                }).length;
-
-                expect(amount).to.equal(amountOfRequiredDocuments);
+                expect(amount).to.be.equal(views.filter(v => v.user === '1@1').length);
             });
 
             it('Should return 0 when no documents matching filter', async function () {
-                const amount = await ViewRepository.getAmount(unexistingView);
+                const amount = await ViewRepository.getAmount({ user: 'a@b' } as any);
                 expect(amount).to.exist;
                 expect(amount).to.be.a('number');
                 expect(amount).to.equal(0);
+            });
+
+            it('Should return amount of views filtered by multiple resources', async function () {
+                const amount = await ViewRepository.getAmount({ user: { $in: ['1@1', '2@2'] } });
+                expect(amount).to.exist;
+                expect(amount).to.be.a('number');
+                expect(amount).to.be.equal(views.filter(v => v.user === '1@1' || v.user === '2@2').length);
             });
         });
 
         context('When data is invalid', function () {
             it('Should return 0 when filter is not in the correct format', async function () {
-                const amount = await ViewRepository.getAmount(unknownProperty);
+                const amount = await ViewRepository.getAmount({ hello: 'world' } as any);
                 expect(amount).to.exist;
                 expect(amount).to.be.a('number');
                 expect(amount).to.equal(0);
@@ -516,4 +287,45 @@ describe('View Repository', function () {
         });
     });
 
+    describe('#increaseViewAmount', function () {
+        context('When data is valid', function () {
+            let createdView: IView;
+            beforeEach(async function () {
+                createdView = await ViewRepository.create(view.resource, view.resourceType, view.user);
+            });
+
+            afterEach(async function () {
+                await ViewModel.deleteOne({ resource: createdView.resource, user: createdView.user });
+            });
+
+            it('Should update lastViewDate when view amount is increased', async function () {
+                await ViewRepository.increaseViewAmount(createdView.resource, createdView.user);
+                const doc = await ViewRepository.getOne(createdView.resource, createdView.user);
+
+                expect(doc).to.exist;
+                expect(doc).to.have.property('lastViewDate').which.is.greaterThan(createdView.lastViewDate);
+            });
+
+            it('Should increase view amount for specific resource / user', async function () {
+                await ViewRepository.increaseViewAmount(createdView.resource, createdView.user);
+                const doc = await ViewRepository.getOne(createdView.resource, createdView.user);
+
+                expect(doc).to.have.property('amount', createdView.amount + 1);
+            });
+
+            it('Should do nothing when view not exists', async function () {
+                await ViewRepository.increaseViewAmount('non', '');
+                const doc = await ViewRepository.getOne(createdView.resource, createdView.user);
+
+                expect(doc).to.have.property('amount', createdView.amount);
+            });
+
+            it('Should not affect view amount when other user viewed', async function () {
+                await ViewRepository.increaseViewAmount(createdView.resource, 'other@user');
+                const doc = await ViewRepository.getOne(createdView.resource, createdView.user);
+
+                expect(doc).to.have.property('amount', createdView.amount);
+            });
+        });
+    });
 });
