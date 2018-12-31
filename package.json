@@ -1,7 +1,7 @@
 {
-  "name": "blue-stream-template",
+  "name": "blue-stream-views",
   "version": "0.0.0",
-  "description": "Blue Stream micro-service template for future services",
+  "description": "Blue Stream micro-service for views counting",
   "main": "index.js",
   "scripts": {
     "start": "tsc && node ./dist/index.js",
@@ -9,12 +9,13 @@
     "test:validation": "cross-env NODE_ENV=test mocha --recursive -r ts-node/register \"src/**/*.validator.spec.ts\" --exit",
     "test:integration": "cross-env NODE_ENV=test mocha --recursive -r ts-node/register \"src/**/*.router.spec.ts\" --exit",
     "test:repository": "cross-env NODE_ENV=test mocha --recursive -r ts-node/register \"src/**/*.repository.spec.ts\" --exit",
+    "test:manager": "cross-env NODE_ENV=test mocha --recursive -r ts-node/register \"src/**/*.manager.spec.ts\" --exit",
     "test:coverage": "cross-env NODE_ENV=test nyc npm test",
     "coverage-test": "cross-env NODE_ENV=test nyc check-coverage --lines 95 --functions 95 --branches 95",
     "tslint": "tslint -c tslint.json -p tsconfig.json",
     "release": "standard-version"
   },
-  "author": "Ron Borysovski, Almog Vagman, Saar Mornel & Yonatan Tal",
+  "author": "Ron Borysovski",
   "license": "ISC",
   "devDependencies": {
     "@types/amqplib": "^0.5.9",
