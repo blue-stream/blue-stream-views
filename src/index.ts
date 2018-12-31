@@ -17,7 +17,7 @@ process.on('unhandledRejection', (err) => {
 process.on('SIGINT', async () => {
     try {
         console.log('User Termination');
-                await mongoose.disconnect();
+        await mongoose.disconnect();
         process.exit(0);
     } catch (error) {
         console.error('Faild to close connections', error);
@@ -25,13 +25,14 @@ process.on('SIGINT', async () => {
 });
 
 (async () => {
-        await mongoose.connect(
+    mongoose.set('useCreateIndex', true);
+    await mongoose.connect(
         `mongodb://${config.db.host}:${config.db.port}/${config.db.name}`,
         { useNewUrlParser: true },
     );
 
     console.log(`[MongoDB] connected to port ${config.db.port}`);
-        Logger.configure();
+    Logger.configure();
     Logger.log(syslogSeverityLevels.Informational, 'Server Started', `Port: ${config.server.port}`);
     console.log('Starting server');
     const server: Server = Server.bootstrap();
