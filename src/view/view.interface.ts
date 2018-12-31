@@ -1,4 +1,12 @@
+export enum ResourceType {
+    VIDEO = 'VIDEO',
+    CHANNEL = 'CHANNEL',
+}
+
 export interface IView {
-    id?: string;
-    property: string;
+    resource: string;
+    resourceType: ResourceType;
+    user: string;
+    amount: number;
+    lastViewDate: Date;
 }
