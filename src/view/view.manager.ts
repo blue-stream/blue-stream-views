@@ -1,40 +1,37 @@
-import { IView } from './view.interface';
+import { ResourceType } from './view.interface';
 import { ViewRepository } from './view.repository';
+import { config } from '../config';
 export class ViewManager {
 
-        static create(view: IView) {
-        return ViewRepository.create(view);
+    static async addView(resource: string, resourceType: ResourceType, user: string): Promise<void> {
+        const view = await ViewRepository.getOne(resource, user);
+
+        if (view) {
+            const now = Date.now();
+            const diff = Math.abs(now - view.lastViewDate.getTime());
+            const minutesDiff = Math.floor((diff / 1000) / 60);
+
+            if (minutesDiff >= config.viewDebounceDuration) {
+                await ViewRepository.increaseViewAmount(resource, user);
+            }
+        } else {
+            await ViewRepository.create(resource, resourceType, user);
+        }
     }
 
-    static createMany(views: IView[]) {
-        return ViewRepository.createMany(views);
+    static getViewsForResource(resource: string | string[]): Promise<number> {
+        const resources = typeof resource === 'string' ? [resource] : resource;
+        return ViewRepository.getAmount({ resource: { $in: resources } });
+
     }
 
-    static updateById(id: string, view: Partial<IView>) {
-        return ViewRepository.updateById(id, view);
-    }
+    static async getViewedResourcesForUserByType(user: string, resourceType: ResourceType): Promise<string[]> {
+        const views = await ViewRepository.getMany({ user, resourceType });
 
-    static updateMany(viewFilter: Partial<IView>, view: Partial<IView>) {
-        return ViewRepository.updateMany(viewFilter, view);
-    }
+        if (views) {
+            return views.map(view => view.resource);
+        }
 
-    static deleteById(id: string) {
-        return ViewRepository.deleteById(id);
+        return [];
     }
-
-    static getById(id: string) {
-        return ViewRepository.getById(id);
-    }
-
-    static getOne(viewFilter: Partial<IView>) {
-        return ViewRepository.getOne(viewFilter);
-    }
-
-    static getMany(viewFilter: Partial<IView>) {
-        return ViewRepository.getMany(viewFilter);
-    }
-
-    static getAmount(viewFilter: Partial<IView>) {
-        return ViewRepository.getAmount(viewFilter);
-    }
-    }
+}
